@@ -1,0 +1,545 @@
+
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  .wrap {
+    background: var(--color-background-secondary);
+    border-radius: var(--border-radius-lg);
+    padding: 12px;
+    min-height: 560px;
+  }
+
+  .shell {
+    display: flex;
+    height: 536px;
+    background: var(--color-background-primary);
+    border-radius: var(--border-radius-lg);
+    border: 0.5px solid var(--color-border-tertiary);
+    overflow: hidden;
+    font-family: 'Inter', var(--font-sans);
+  }
+
+  .sidebar {
+    width: 188px;
+    border-right: 0.5px solid var(--color-border-tertiary);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background: var(--color-background-secondary);
+  }
+
+  .sidebar-top {
+    padding: 14px 14px 10px;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .app-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 10px;
+  }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-background-tertiary);
+    border-radius: 8px;
+    padding: 6px 10px;
+  }
+
+  .search i { font-size: 13px; color: var(--color-text-tertiary); }
+  .search input {
+    background: none; border: none; outline: none;
+    font-size: 12px; color: var(--color-text-secondary);
+    font-family: inherit; width: 100%;
+  }
+  .search input::placeholder { color: var(--color-text-tertiary); }
+
+  .note-list { flex: 1; overflow-y: auto; padding: 6px 0; }
+
+  .note-list::-webkit-scrollbar { width: 3px; }
+  .note-list::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+
+  .note-item {
+    padding: 8px 14px;
+    cursor: pointer;
+    border-radius: 0;
+    transition: background 0.1s;
+  }
+  .note-item:hover { background: var(--color-background-tertiary); }
+  .note-item.active { background: var(--color-background-info); }
+
+  .note-item-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .note-item.active .note-item-title { color: var(--color-text-info); }
+
+  .note-item-preview {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+
+  .sidebar-footer {
+    padding: 10px 14px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .new-btn {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 12px; color: var(--color-text-info);
+    background: none; border: none; cursor: pointer;
+    font-family: inherit; padding: 0;
+  }
+  .new-btn:hover { opacity: 0.7; }
+
+  .note-count { font-size: 11px; color: var(--color-text-tertiary); }
+
+  .editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .editor-header {
+    padding: 14px 20px 0;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+    padding-bottom: 10px;
+  }
+
+  .editor-title {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    background: none;
+    border: none;
+    outline: none;
+    font-family: inherit;
+    width: 100%;
+    display: block;
+  }
+
+  .editor-meta {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-top: 4px;
+  }
+
+  .editor-body {
+    flex: 1;
+    padding: 16px 20px;
+    overflow-y: auto;
+    position: relative;
+  }
+
+  .editor-body::-webkit-scrollbar { width: 3px; }
+  .editor-body::-webkit-scrollbar-thumb { background: var(--color-border-secondary); border-radius: 2px; }
+
+  .editor-textarea {
+    width: 100%; height: 100%;
+    background: none; border: none; outline: none; resize: none;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--color-text-primary);
+    display: none;
+  }
+
+  .rendered-view {
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--color-text-primary);
+    cursor: text;
+  }
+
+  .rendered-view p { margin-bottom: 8px; }
+
+  .math-result {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--color-background-info);
+    border-radius: 6px;
+    padding: 1px 8px 1px 6px;
+    font-size: 13px;
+    color: var(--color-text-info);
+    font-weight: 500;
+    margin: 0 2px;
+    cursor: default;
+  }
+
+  .math-result i { font-size: 11px; }
+
+  .math-expr {
+    color: var(--color-text-secondary);
+    font-size: 13px;
+  }
+
+  .math-err {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--color-background-danger);
+    border-radius: 6px; padding: 1px 8px 1px 6px;
+    font-size: 12px; color: var(--color-text-danger);
+    margin: 0 2px;
+  }
+
+  .md-h1 { font-size: 18px; font-weight: 500; margin-bottom: 10px; color: var(--color-text-primary); }
+  .md-h2 { font-size: 15px; font-weight: 500; margin: 14px 0 6px; color: var(--color-text-primary); }
+  .md-bold { font-weight: 500; }
+  .md-italic { font-style: italic; }
+  .md-code { font-family: var(--font-mono); font-size: 12px; background: var(--color-background-tertiary); padding: 1px 5px; border-radius: 4px; color: var(--color-text-secondary); }
+  .md-tag { color: var(--color-text-info); font-size: 13px; }
+  .md-ul { margin: 4px 0 8px 16px; }
+  .md-ul li { margin-bottom: 3px; }
+  .md-check { color: var(--color-text-success); }
+  .md-uncheck { color: var(--color-text-tertiary); }
+
+  .toolbar {
+    padding: 8px 20px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .tb-btn {
+    width: 28px; height: 28px;
+    background: none; border: none; cursor: pointer;
+    border-radius: 6px; color: var(--color-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; transition: all 0.1s;
+  }
+  .tb-btn:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+  .tb-btn.active { background: var(--color-background-info); color: var(--color-text-info); }
+
+  .tb-sep { width: 0.5px; height: 16px; background: var(--color-border-secondary); margin: 0 4px; }
+  .tb-spacer { flex: 1; }
+
+  .math-hint {
+    padding: 7px 20px;
+    background: var(--color-background-info);
+    font-size: 11px;
+    color: var(--color-text-info);
+    display: flex; align-items: center; gap: 6px;
+    border-top: 0.5px solid var(--color-border-tertiary);
+  }
+</style>
+
+<h2 class="sr-only">Minimal notes — редактор заметок с живой математикой</h2>
+
+<div class="wrap">
+<div class="shell">
+
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="app-title">Заметки</div>
+      <div class="search">
+        <i class="ti ti-search" aria-hidden="true"></i>
+        <input type="text" placeholder="Поиск" id="searchInput" oninput="filterNotes()">
+      </div>
+    </div>
+
+    <div class="note-list" id="noteList"></div>
+
+    <div class="sidebar-footer">
+      <button class="new-btn" onclick="newNote()">
+        <i class="ti ti-plus" aria-hidden="true"></i> Новая
+      </button>
+      <span class="note-count" id="noteCount">3 заметки</span>
+    </div>
+  </div>
+
+  <div class="editor">
+    <div class="editor-header">
+      <input class="editor-title" id="noteTitle" placeholder="Без названия" oninput="updateTitle()">
+      <div class="editor-meta" id="editorMeta">сегодня</div>
+    </div>
+
+    <div class="editor-body" id="editorBody" onclick="enterEdit()">
+      <div class="rendered-view" id="renderedView"></div>
+      <textarea class="editor-textarea" id="editorText" oninput="handleInput()" onblur="exitEdit()" onkeydown="handleKeydown(event)" placeholder="Начни писать... Математика вычисляется автоматически: 2 + 2, sqrt(9), sin(30°)"></textarea>
+    </div>
+
+    <div class="math-hint" id="mathHint" style="display:none">
+      <i class="ti ti-calculator" aria-hidden="true" style="font-size:13px"></i>
+      Вычислено: попробуй написать <strong>2 + 2</strong> или <strong>sqrt(16)</strong>
+    </div>
+
+    <div class="toolbar">
+      <button class="tb-btn" onclick="fmt('**')" title="Жирный"><i class="ti ti-bold" aria-hidden="true"></i></button>
+      <button class="tb-btn" onclick="fmt('_')" title="Курсив"><i class="ti ti-italic" aria-hidden="true"></i></button>
+      <button class="tb-btn" onclick="insertTag()" title="Тег"><i class="ti ti-hash" aria-hidden="true"></i></button>
+      <div class="tb-sep"></div>
+      <button class="tb-btn" onclick="insertList()" title="Список"><i class="ti ti-list" aria-hidden="true"></i></button>
+      <button class="tb-btn" onclick="insertCheck()" title="Чеклист"><i class="ti ti-checkbox" aria-hidden="true"></i></button>
+      <div class="tb-spacer"></div>
+      <button class="tb-btn" id="editToggleBtn" onclick="toggleEdit()" title="Редактировать"><i class="ti ti-pencil" aria-hidden="true"></i></button>
+      <button class="tb-btn" onclick="deleteNote()" title="Удалить"><i class="ti ti-trash" aria-hidden="true"></i></button>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.0/math.min.js"></script>
+<script>
+let notes = [
+  {
+    id: 1,
+    title: "Расчёты для проекта",
+    body: "# Бюджет\n\nКоличество дней: 14\nСтавка в день: 150\nИтого: 14 * 150\n\nСкидка 10%: 14 * 150 * 0.9\n\n---\n\nТри недели: 3 * 7 * 150\n\n#финансы #проект",
+    date: "сегодня, 14:32"
+  },
+  {
+    id: 2,
+    title: "Математика",
+    body: "# Формулы\n\nПростое: 2 + 2\n\nКвадратный корень: sqrt(144)\n\nСтепень: 2^10\n\nТриг: sin(90) в градусах это 1\n\nПроцент: 320 * 15 / 100\n\n#math",
+    date: "вчера"
+  },
+  {
+    id: 3,
+    title: "Список дел",
+    body: "- [ ] Купить продукты\n- [x] Позвонить врачу\n- [ ] Прочитать книгу\n- [x] Сделать зарядку\n\nВыполнено: 2 / 4 = 2/4\n\n#todo",
+    date: "2 дня назад"
+  }
+];
+
+let currentId = 1;
+let isEditing = false;
+let mathShown = false;
+
+function evalMath(expr) {
+  try {
+    const cleaned = expr.trim().replace(/[,،]/g, '.');
+    if (!/[\d\+\-\*\/\^\(\)sqrt|sin|cos|tan|log|pi|e\s\.%]/.test(cleaned)) return null;
+    if (/^[\d\s\.]+$/.test(cleaned)) return null;
+    const scope = { pi: Math.PI, e: Math.E };
+    const exprDeg = cleaned.replace(/sin\((\d+)\)/g, (_, d) => `sin(${d} * pi / 180)`)
+                           .replace(/cos\((\d+)\)/g, (_, d) => `cos(${d} * pi / 180)`)
+                           .replace(/tan\((\d+)\)/g, (_, d) => `tan(${d} * pi / 180)`);
+    const result = math.evaluate(exprDeg, scope);
+    if (typeof result !== 'number' || !isFinite(result)) return null;
+    const rounded = parseFloat(result.toFixed(10));
+    const display = Number.isInteger(rounded) ? rounded : parseFloat(rounded.toFixed(6));
+    return display;
+  } catch { return null; }
+}
+
+function renderBody(text) {
+  let hasMath = false;
+  const lines = text.split('\n');
+  let html = '';
+  let inUl = false;
+
+  for (let line of lines) {
+    const isLi = /^- /.test(line);
+    if (!isLi && inUl) { html += '</ul>'; inUl = false; }
+
+    if (/^# /.test(line)) {
+      html += `<div class="md-h1">${esc(line.slice(2))}</div>`;
+    } else if (/^## /.test(line)) {
+      html += `<div class="md-h2">${esc(line.slice(3))}</div>`;
+    } else if (/^---/.test(line)) {
+      html += `<hr style="border:none;border-top:0.5px solid var(--color-border-tertiary);margin:10px 0">`;
+    } else if (/^- \[x\] /.test(line)) {
+      if (!inUl) { html += '<ul class="md-ul">'; inUl = true; }
+      html += `<li><span class="md-check"><i class="ti ti-check" aria-hidden="true" style="font-size:12px"></i></span> <span style="text-decoration:line-through;color:var(--color-text-tertiary)">${renderInline(line.slice(6))}</span></li>`;
+    } else if (/^- \[ \] /.test(line)) {
+      if (!inUl) { html += '<ul class="md-ul">'; inUl = true; }
+      html += `<li><span class="md-uncheck"><i class="ti ti-square" aria-hidden="true" style="font-size:12px"></i></span> ${renderInline(line.slice(6))}</li>`;
+    } else if (/^- /.test(line)) {
+      if (!inUl) { html += '<ul class="md-ul">'; inUl = true; }
+      html += `<li>${renderInline(line.slice(2))}</li>`;
+    } else if (line.trim() === '') {
+      html += '<div style="height:4px"></div>';
+    } else {
+      const rendered = renderInline(line);
+      if (rendered !== renderInline(line, true)) hasMath = true;
+      html += `<p>${rendered}</p>`;
+    }
+  }
+
+  if (inUl) html += '</ul>';
+  return { html, hasMath };
+}
+
+function renderInline(text, skipMath = false) {
+  let t = esc(text);
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<span class="md-bold">$1</span>');
+  t = t.replace(/_([^_]+)_/g, '<span class="md-italic">$1</span>');
+  t = t.replace(/`([^`]+)`/g, '<span class="md-code">$1</span>');
+  t = t.replace(/#\w+/g, '<span class="md-tag">$&</span>');
+
+  if (!skipMath) {
+    t = t.replace(/([0-9][^=\n<]*?(?:\+|\-|\*|\/|\^|sqrt|sin|cos|tan|log|%)[^=\n<]*?[0-9\)])/g, (match) => {
+      const raw = match.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/<[^>]+>/g,'');
+      const result = evalMath(raw);
+      if (result === null) return match;
+      return `<span class="math-expr">${match}</span> = <span class="math-result"><i class="ti ti-equal" aria-hidden="true"></i>${result}</span>`;
+    });
+  }
+
+  return t;
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderSidebar() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const list = document.getElementById('noteList');
+  list.innerHTML = '';
+  const filtered = notes.filter(n => !q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q));
+  filtered.forEach(n => {
+    const div = document.createElement('div');
+    div.className = 'note-item' + (n.id === currentId ? ' active' : '');
+    div.onclick = () => selectNote(n.id);
+    const preview = n.body.replace(/^#+ /gm,'').replace(/\n/g,' ').slice(0, 50);
+    div.innerHTML = `<div class="note-item-title">${esc(n.title || 'Без названия')}</div><div class="note-item-preview">${esc(preview)}</div>`;
+    list.appendChild(div);
+  });
+  document.getElementById('noteCount').textContent = `${notes.length} заметок`;
+}
+
+function renderEditor() {
+  const note = notes.find(n => n.id === currentId);
+  if (!note) return;
+  document.getElementById('noteTitle').value = note.title;
+  document.getElementById('editorMeta').textContent = note.date;
+  const ta = document.getElementById('editorText');
+  ta.value = note.body;
+  const { html, hasMath } = renderBody(note.body);
+  document.getElementById('renderedView').innerHTML = html;
+
+  if (hasMath && !mathShown) {
+    mathShown = true;
+    document.getElementById('mathHint').style.display = 'flex';
+    setTimeout(() => { document.getElementById('mathHint').style.display = 'none'; }, 3000);
+  }
+}
+
+function selectNote(id) {
+  currentId = id;
+  exitEdit();
+  renderSidebar();
+  renderEditor();
+}
+
+function newNote() {
+  const id = Date.now();
+  const now = new Date();
+  notes.unshift({ id, title: '', body: '', date: 'только что' });
+  currentId = id;
+  renderSidebar();
+  renderEditor();
+  setTimeout(() => {
+    document.getElementById('noteTitle').focus();
+  }, 50);
+}
+
+function deleteNote() {
+  if (notes.length === 1) { notes[0].title = ''; notes[0].body = ''; renderSidebar(); renderEditor(); return; }
+  notes = notes.filter(n => n.id !== currentId);
+  currentId = notes[0].id;
+  renderSidebar();
+  renderEditor();
+}
+
+function updateTitle() {
+  const note = notes.find(n => n.id === currentId);
+  if (note) { note.title = document.getElementById('noteTitle').value; renderSidebar(); }
+}
+
+function handleInput() {
+  const note = notes.find(n => n.id === currentId);
+  if (note) {
+    note.body = document.getElementById('editorText').value;
+    const { html, hasMath } = renderBody(note.body);
+    document.getElementById('renderedView').innerHTML = html;
+    renderSidebar();
+  }
+}
+
+function enterEdit() {
+  if (isEditing) return;
+  isEditing = true;
+  document.getElementById('renderedView').style.display = 'none';
+  const ta = document.getElementById('editorText');
+  ta.style.display = 'block';
+  ta.style.height = '100%';
+  ta.focus();
+  document.getElementById('editToggleBtn').classList.add('active');
+}
+
+function exitEdit() {
+  isEditing = false;
+  document.getElementById('renderedView').style.display = 'block';
+  document.getElementById('editorText').style.display = 'none';
+  document.getElementById('editToggleBtn').classList.remove('active');
+  const note = notes.find(n => n.id === currentId);
+  if (note) {
+    const { html } = renderBody(note.body);
+    document.getElementById('renderedView').innerHTML = html;
+  }
+}
+
+function toggleEdit() {
+  if (isEditing) exitEdit(); else enterEdit();
+}
+
+function fmt(mark) {
+  const ta = document.getElementById('editorText');
+  if (!isEditing) enterEdit();
+  const s = ta.selectionStart, e = ta.selectionEnd;
+  const sel = ta.value.slice(s, e) || 'текст';
+  const rep = mark + sel + mark;
+  ta.value = ta.value.slice(0, s) + rep + ta.value.slice(e);
+  ta.selectionStart = s + mark.length;
+  ta.selectionEnd = s + mark.length + sel.length;
+  handleInput();
+}
+
+function insertTag() {
+  const ta = document.getElementById('editorText');
+  if (!isEditing) enterEdit();
+  const pos = ta.selectionStart;
+  ta.value = ta.value.slice(0, pos) + '#тег ' + ta.value.slice(pos);
+  ta.selectionStart = ta.selectionEnd = pos + 1;
+  handleInput();
+  ta.focus();
+}
+
+function insertList() {
+  const ta = document.getElementById('editorText');
+  if (!isEditing) enterEdit();
+  const pos = ta.selectionStart;
+  ta.value = ta.value.slice(0, pos) + '\n- пункт\n- пункт\n' + ta.value.slice(pos);
+  handleInput(); ta.focus();
+}
+
+function insertCheck() {
+  const ta = document.getElementById('editorText');
+  if (!isEditing) enterEdit();
+  const pos = ta.selectionStart;
+  ta.value = ta.value.slice(0, pos) + '\n- [ ] задача\n- [ ] задача\n' + ta.value.slice(pos);
+  handleInput(); ta.focus();
+}
+
+function handleKeydown(e) {
+  if (e.key === 'Tab') { e.preventDefault(); }
+  if (e.key === 'Escape') exitEdit();
+}
+
+function filterNotes() { renderSidebar(); }
+
+renderSidebar();
+renderEditor();
+</script>
