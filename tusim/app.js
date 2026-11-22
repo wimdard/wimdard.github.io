@@ -1,6 +1,7 @@
 // Тусим · календарь в Telegram
 const API = "https://gqlslscpxehonlyajssy.supabase.co/functions/v1/tusim-bot?api=calendar";
 const API_CREATE = API.replace("api=calendar", "api=create");
+const API_DELETE = API.replace("api=calendar", "api=delete");
 const BOT = "@calasisbot";
 const DAY_START = 10, DAY_END = 23, MIN_FREE = 60;
 
@@ -26,6 +27,7 @@ const ICON = {
   link: svg('<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>'),
   wifi: svg('<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r=".8"/>'),
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
+  trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
 };
 const CAT_ICON = {
@@ -339,8 +341,45 @@ function openEvent(id) {
         return pr ? `<div class="person">${avatar(pr, `md ${p.rsvp}`)}<div class="name">${p.user_id === data.me.id ? "Вы" : esc(pr.display_name)}<small>@${esc(pr.username)}</small></div>
           <span class="badge ${p.rsvp}">${RSVP[p.rsvp]}</span></div>` : "";
       }).join("")}
-    </div>`);
+    </div>
+    ${canDelete(e) ? `<button class="danger" data-act="del" data-id="${e.id}">${ICON.trash}Удалить событие</button>` : ""}`);
   haptic();
+}
+
+const canDelete = (e) => e.created_by === state.data.me.id || state.data.me.role === "admin";
+
+async function deleteEvent(btn) {
+  // Первое нажатие — предупреждение, второе — удаление
+  if (!btn.classList.contains("confirm")) {
+    btn.classList.add("confirm");
+    btn.innerHTML = `${ICON.trash}Точно удалить? Нажмите ещё раз`;
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("warning");
+    clearTimeout(btn._t);
+    btn._t = setTimeout(() => { btn.classList.remove("confirm"); btn.innerHTML = `${ICON.trash}Удалить событие`; }, 4000);
+    return;
+  }
+  clearTimeout(btn._t);
+  btn.disabled = true;
+  btn.innerHTML = "Удаляю…";
+  try {
+    const res = await fetch(API_DELETE, {
+      method: "POST",
+      headers: { "x-init-data": tg.initData, "content-type": "application/json" },
+      body: JSON.stringify({ event_id: btn.dataset.id }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error && body.error !== "server" ? body.error : "Не получилось удалить");
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+    closeSheet();
+    cache.clear();
+    toast("Событие удалено");
+    refresh();
+  } catch (e) {
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("error");
+    btn.disabled = false;
+    btn.classList.remove("confirm");
+    btn.innerHTML = `${ICON.trash}${esc(e.message)}`;
+  }
 }
 
 // ---------- создание события ----------
@@ -487,6 +526,7 @@ document.addEventListener("click", (ev) => {
     renderForm();
   }
   else if (act === "submit") submitForm(el);
+  else if (act === "del") deleteEvent(el);
   else if (act === "day") {
     const [y, m, d] = el.dataset.d.split("-").map(Number);
     state.sel = new Date(y, m - 1, d);
