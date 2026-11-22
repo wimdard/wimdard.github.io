@@ -112,12 +112,32 @@ body.open .sheet{transform:none}
 .person:last-child{border:0}
 .person .name{flex:1;font-weight:700}
 .person .name small{display:block;font-weight:600;color:var(--muted);font-size:12px}
+
+.fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 20px);width:56px;height:56px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center;box-shadow:0 8px 28px rgba(0,0,0,.5);transition:transform .15s}
+.fab:active{transform:scale(.93)}
+.fab svg{width:24px;height:24px;stroke-width:2.2}
+.form label{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:800;margin:16px 0 6px}
+.form input,.form textarea{width:100%;background:var(--card);border:1px solid var(--line2);border-radius:12px;color:#fff;font:inherit;font-size:16px;padding:12px;outline:none;color-scheme:dark}
+.form input:focus,.form textarea:focus{border-color:rgba(255,255,255,.4)}
+.form textarea{min-height:72px;resize:vertical}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--line2);font-size:13px;font-weight:700;color:var(--muted2);display:flex;align-items:center;gap:6px;transition:.15s}
+.opt.on{background:#fff;color:#000;border-color:#fff}
+.opt .av{width:20px;height:20px;font-size:10px}
+.form .err{color:var(--red);font-size:13px;font-weight:600;margin-top:12px;min-height:18px}
+.form .hint{color:var(--muted);font-size:12px;margin-top:6px}
+.submit{width:100%;height:50px;border-radius:14px;background:#fff;color:#000;font-weight:800;font-size:16px;margin-top:10px}
+.submit:disabled{opacity:.5}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 92px);transform:translate(-50%,20px);background:#fff;color:#000;font-weight:700;font-size:14px;padding:10px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:.25s;white-space:nowrap}
+.toast.show{opacity:1;transform:translate(-50%,0)}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div class="sheet-bg" data-act="close"></div>
 <div class="sheet" id="sheet"><div class="grab"></div><div id="sheet-body"></div></div>
+<div class="toast" id="toast"></div>
 
 <script>
 const API = "https://gqlslscpxehonlyajssy.supabase.co/functions/v1/tusim-bot?api=calendar";
@@ -136,6 +156,7 @@ const ICON = {
   right: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
   pin: '<svg viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
   clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
 };
 
 const tg = window.Telegram && window.Telegram.WebApp;
@@ -319,7 +340,9 @@ function render() {
     </div>
     ${renderFriends(data)}
     ${renderCalendar(byDay)}
-    ${renderAgenda(byDay, data)}`;
+    ${renderAgenda(byDay, data)}
+    ${data ? `<button class="fab" data-act="new" aria-label="Создать событие">${ICON.plus}</button>` : ""}
+    <div style="height:70px"></div>`;
 }
 
 function screen(title, text) {
@@ -360,6 +383,95 @@ function closeSheet() {
   document.body.classList.remove("open");
   tg.BackButton.hide();
 }
+
+// ---------- создание события ----------
+const API_CREATE = API.replace("api=calendar", "api=create");
+const DURATIONS = [[60, "1 ч"], [120, "2 ч"], [180, "3 ч"], [240, "4 ч"], [480, "Весь вечер"]];
+let draft = null;
+
+function newDraft() {
+  const d = dayStart(state.sel) < dayStart(new Date()) ? dayStart(new Date()) : state.sel;
+  return { title: "", category: "meet", date: key(d), time: "19:00", minutes: 120, location: "", description: "", guests: new Set(), all: false };
+}
+
+function renderForm(err = "") {
+  const data = state.data;
+  const friends = data.profiles.filter((p) => p.id !== data.me.id);
+  const opt = (act, val, on, label) => `<button type="button" class="opt ${on ? "on" : ""}" data-act="${act}" data-v="${esc(val)}">${label}</button>`;
+  document.getElementById("sheet-body").innerHTML = `<div class="form">
+    <h3>Новое событие</h3>
+    <label>Что</label>
+    <input name="title" maxlength="120" placeholder="Квиз в баре" value="${esc(draft.title)}" autocomplete="off">
+    <label>Тип</label>
+    <div class="opts">${Object.entries(CAT).map(([k, v]) => opt("cat", k, draft.category === k, v)).join("")}</div>
+    <div class="two">
+      <div><label>Дата</label><input name="date" type="date" min="${key(new Date())}" value="${draft.date}"></div>
+      <div><label>Начало</label><input name="time" type="time" step="300" value="${draft.time}"></div>
+    </div>
+    <label>Длительность</label>
+    <div class="opts">${DURATIONS.map(([m, l]) => opt("dur", m, draft.minutes === m, l)).join("")}</div>
+    <label>Где</label>
+    <input name="location" maxlength="120" placeholder="Необязательно" value="${esc(draft.location)}" autocomplete="off">
+    <label>Описание</label>
+    <textarea name="description" maxlength="1000" placeholder="Необязательно">${esc(draft.description)}</textarea>
+    <label>Кого позвать</label>
+    <div class="opts">${opt("all", "1", draft.all, "Всех")}${friends.map((p) =>
+      opt("guest", p.id, draft.all || draft.guests.has(p.id), `${avatar(p)}${esc(p.display_name)}`)).join("")}</div>
+    <div class="hint">Приглашённым придёт сообщение от бота, а в подключённых группах появится опрос «Иду / Возможно / Не смогу».</div>
+    <div class="err">${esc(err)}</div>
+    <button type="button" class="submit" data-act="submit">Создать и отправить опрос</button>
+  </div>`;
+}
+
+function openForm() {
+  draft = newDraft();
+  renderForm();
+  document.body.classList.add("open");
+  tg.BackButton.show();
+}
+
+async function submitForm(btn) {
+  const start = new Date(`${draft.date}T${draft.time}`);
+  if (!draft.title.trim()) return renderForm("Напишите название");
+  if (isNaN(+start)) return renderForm("Укажите дату и время");
+  if (+start < Date.now() - 5 * 6e4) return renderForm("Это время уже прошло");
+  btn.disabled = true;
+  btn.textContent = "Создаю…";
+  try {
+    const res = await fetch(API_CREATE, {
+      method: "POST",
+      headers: { "x-init-data": tg.initData, "content-type": "application/json" },
+      body: JSON.stringify({
+        title: draft.title, category: draft.category, starts_at: start.toISOString(), minutes: draft.minutes,
+        location: draft.location, description: draft.description, guests: draft.all ? "all" : [...draft.guests],
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error && body.error !== "server" ? body.error : "Не получилось создать, попробуйте ещё раз");
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+    closeSheet();
+    cache.clear();
+    state.sel = dayStart(start);
+    state.cursor = state.view === "week" ? state.sel : new Date(start.getFullYear(), start.getMonth(), 1);
+    toast("Событие создано · опрос отправлен");
+    refresh();
+  } catch (e) {
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("error");
+    renderForm(e.message);
+  }
+}
+
+function toast(text) {
+  const el = document.getElementById("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+document.addEventListener("input", (ev) => {
+  const name = ev.target.name;
+  if (draft && name in draft) draft[name] = ev.target.value;
+});
 
 // ---------- навигация ----------
 async function refresh() {
@@ -403,6 +515,17 @@ document.addEventListener("click", (ev) => {
   else if (act === "event") openEvent(el.dataset.id);
   else if (act === "close") closeSheet();
   else if (act === "retry") refresh();
+  else if (act === "new") openForm();
+  else if (act === "cat") { draft.category = el.dataset.v; renderForm(); }
+  else if (act === "dur") { draft.minutes = Number(el.dataset.v); renderForm(); }
+  else if (act === "all") { draft.all = !draft.all; draft.guests.clear(); renderForm(); }
+  else if (act === "guest") {
+    const id = el.dataset.v;
+    if (draft.all) { draft.all = false; state.data.profiles.forEach((p) => p.id !== state.data.me.id && draft.guests.add(p.id)); }
+    draft.guests.has(id) ? draft.guests.delete(id) : draft.guests.add(id);
+    renderForm();
+  }
+  else if (act === "submit") submitForm(el);
   else if (act === "day") {
     const [y, m, d] = el.dataset.d.split("-").map(Number);
     state.sel = new Date(y, m - 1, d);
