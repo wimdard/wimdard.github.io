@@ -2,6 +2,7 @@
 const API = "https://gqlslscpxehonlyajssy.supabase.co/functions/v1/tusim-bot?api=calendar";
 const API_CREATE = API.replace("api=calendar", "api=create");
 const API_DELETE = API.replace("api=calendar", "api=delete");
+const API_STATUS = API.replace("api=calendar", "api=status");
 const BOT = "@calasisbot";
 const DAY_START = 10, DAY_END = 23, MIN_FREE = 60;
 
@@ -196,10 +197,14 @@ function renderFriends(data) {
   const ppl = [data.byId.get(data.me.id), ...data.profiles.filter((p) => p.id !== data.me.id)].filter(Boolean);
   const free = ppl.filter((p) => p.status === "free" || p.status === "online").length;
   return `<div class="sec-h"><h2>Компания</h2><em><b>${free}</b> из ${ppl.length} свободны</em></div>
-  <div class="friends">${ppl.map((p) => `<div class="friend" title="${esc(p.status_note || "")}">
+  <div class="friends">${ppl.map((p) => {
+    const me = p.id === data.me.id;
+    const tag = me ? "button" : "div";
+    return `<${tag} class="friend ${me ? "me" : ""}" ${me ? `data-act="status"` : ""} title="${esc(p.status_note || "")}">
     ${avatar(p, "ring", `--ring:${STATUS_COLOR[p.status] || "transparent"}`)}
-    <span class="nm">${p.id === data.me.id ? "Вы" : esc(p.display_name.split(" ")[0])}</span>
-    <span class="st">${esc(STATUS[p.status] || "")}</span></div>`).join("")}</div>`;
+    <span class="nm">${me ? "Вы" : esc(p.display_name.split(" ")[0])}</span>
+    <span class="st">${esc(STATUS[p.status] || (me ? "статус" : ""))}</span></${tag}>`;
+  }).join("")}</div>`;
 }
 
 function dayCell(d, byDay, opts = {}) {
@@ -382,6 +387,56 @@ async function deleteEvent(btn) {
   }
 }
 
+// ---------- свой статус ----------
+let statusDraft = null;
+
+function renderStatus(err = "") {
+  openSheet(`<div class="form">
+    <h3>Мой статус</h3>
+    <div class="lead">Его видит вся компания в календаре и в /friends</div>
+    <label>Сейчас я</label>
+    <div class="opts">${Object.entries(STATUS).map(([k, v]) => `<button type="button" class="opt ${statusDraft.status === k ? "on" : ""}" data-act="st" data-v="${k}">
+      <i class="st-dot" style="background:${STATUS_COLOR[k]}"></i>${v}</button>`).join("")}</div>
+    <label>Подпись</label>
+    <input name="note" maxlength="80" placeholder="Например: до 18:00 на работе" value="${esc(statusDraft.note)}" autocomplete="off">
+    <div class="err">${esc(err)}</div>
+    <button type="button" class="submit" data-act="st-save">Сохранить</button>
+  </div>`);
+}
+
+function openStatus() {
+  const me = state.data.byId.get(state.data.me.id);
+  statusDraft = { status: me?.status || "free", note: me?.status_note || "" };
+  closeSheet();
+  renderStatus();
+}
+
+async function saveStatus(btn) {
+  btn.disabled = true;
+  btn.textContent = "Сохраняю…";
+  try {
+    const res = await fetch(API_STATUS, {
+      method: "POST",
+      headers: { "x-init-data": tg.initData, "content-type": "application/json" },
+      body: JSON.stringify({ status: statusDraft.status, note: statusDraft.note }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error && body.error !== "server" ? body.error : "Не получилось сохранить");
+    // Обновляем себя во всех загруженных месяцах, чтобы не грузить заново
+    for (const d of cache.values()) {
+      const me = d.byId.get(d.me.id);
+      if (me) { me.status = body.status; me.status_note = body.status_note; }
+    }
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+    closeSheet();
+    toast("Статус обновлён");
+    render();
+  } catch (e) {
+    tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("error");
+    renderStatus(e.message);
+  }
+}
+
 // ---------- создание события ----------
 const DURATIONS = [[60, "1 ч"], [120, "2 ч"], [180, "3 ч"], [240, "4 ч"], [480, "Весь вечер"]];
 let draft = null;
@@ -469,7 +524,8 @@ function toast(text) {
 
 document.addEventListener("input", (ev) => {
   const name = ev.target.name;
-  if (draft && name in draft) draft[name] = ev.target.value;
+  if (name === "note" && statusDraft) statusDraft.note = ev.target.value;
+  else if (draft && name in draft) draft[name] = ev.target.value;
 });
 
 // ---------- навигация ----------
@@ -527,6 +583,9 @@ document.addEventListener("click", (ev) => {
   }
   else if (act === "submit") submitForm(el);
   else if (act === "del") deleteEvent(el);
+  else if (act === "status") openStatus();
+  else if (act === "st") { statusDraft.status = el.dataset.v; renderStatus(); }
+  else if (act === "st-save") saveStatus(el);
   else if (act === "day") {
     const [y, m, d] = el.dataset.d.split("-").map(Number);
     state.sel = new Date(y, m - 1, d);
