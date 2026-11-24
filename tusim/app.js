@@ -83,10 +83,13 @@ function range() {
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const haptic = () => tg && tg.HapticFeedback && tg.HapticFeedback.selectionChanged();
 const colorOf = (e) => esc(e.author?.color || "#FFFFFF");
+const nameOf = (p) => (p?.display_name || p?.username || "").trim();
+const firstName = (p) => nameOf(p).split(" ")[0];
+const sheetOpen = () => document.body.classList.contains("open");
 
 function avatar(p, cls = "", style = "") {
   if (!p) return "";
-  const letter = esc((p.display_name || p.username || "?").trim()[0].toUpperCase());
+  const letter = esc((nameOf(p)[0] || "?").toUpperCase());
   return `<div class="av ${cls}" style="background:${esc(p.color || "#60A5FA")};${style}">${letter}</div>`;
 }
 
@@ -117,6 +120,7 @@ function eventsByDay(data) {
   const map = new Map();
   for (const e of data.events) {
     if (state.onlyMine && !e.my) continue;
+    if (!(e.end > e.start)) continue;
     for (let d = dayStart(e.start); d < e.end; d = addDays(d, 1)) {
       const k = key(d);
       if (!map.has(k)) map.set(k, []);
@@ -154,7 +158,7 @@ function nextEvent(data) {
 
 // ---------- отрисовка ----------
 function header(data) {
-  const name = data ? esc((data.byId.get(data.me.id)?.display_name || "").split(" ")[0]) : "";
+  const name = data ? esc(firstName(data.byId.get(data.me.id))) : "";
   const h = new Date().getHours();
   const hello = h < 5 ? "Доброй ночи" : h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер";
   let title;
@@ -172,6 +176,7 @@ function header(data) {
       <button class="icon-btn" data-act="prev" aria-label="Назад">${ICON.left}</button>
       <button class="pill" data-act="today">Сегодня</button>
       <button class="icon-btn" data-act="next" aria-label="Вперёд">${ICON.right}</button>
+      ${data ? `<button class="pill add desk" data-act="new">${ICON.plus}Событие</button>` : ""}
     </div>
   </header>`;
 }
@@ -202,7 +207,7 @@ function renderFriends(data) {
     const tag = me ? "button" : "div";
     return `<${tag} class="friend ${me ? "me" : ""}" ${me ? `data-act="status"` : ""} title="${esc(p.status_note || "")}">
     ${avatar(p, "ring", `--ring:${STATUS_COLOR[p.status] || "transparent"}`)}
-    <span class="nm">${me ? "Вы" : esc(p.display_name.split(" ")[0])}</span>
+    <span class="nm">${me ? "Вы" : esc(firstName(p))}</span>
     <span class="st">${esc(STATUS[p.status] || (me ? "статус" : ""))}</span></${tag}>`;
   }).join("")}</div>`;
 }
@@ -210,10 +215,15 @@ function renderFriends(data) {
 function dayCell(d, byDay, opts = {}) {
   const list = byDay.get(key(d)) || [];
   const dots = list.slice(0, 3).map((e) => `<i class="${e.my ? "mine" : ""}" style="--c:${colorOf(e)}"></i>`).join("");
+  // На широком экране вместо точек — названия событий
+  const max = state.view === "week" ? 6 : 3;
+  const shown = list.length > max ? max - 1 : max;
+  const evs = list.slice(0, shown).map((e) => `<em class="${e.my ? "mine" : ""}" style="--c:${colorOf(e)}">${esc(e.title)}</em>`).join("")
+    + (list.length > shown ? `<em class="more">ещё ${list.length - shown}</em>` : "");
   const cls = ["cell",
     opts.out ? "out" : "", wdIdx(d) > 4 ? "wkend" : "", dayStart(d) < dayStart(new Date()) ? "past" : "",
     same(d, new Date()) ? "today" : "", same(d, state.sel) ? "sel" : ""].join(" ");
-  return `<button class="${cls}" data-act="day" data-d="${key(d)}">${opts.label || ""}<span>${d.getDate()}</span><div class="dots">${dots}</div></button>`;
+  return `<button class="${cls}" data-act="day" data-d="${key(d)}">${opts.label || ""}<span>${d.getDate()}</span><div class="dots">${dots}</div><div class="evs">${evs}</div></button>`;
 }
 
 function renderCalendar(byDay) {
@@ -276,19 +286,23 @@ function render() {
   if (data) state.animate = false;
   $app.innerHTML = `
     ${header(data)}
-    <div class="${anim}">${renderNext(data)}</div>
-    <div class="toolbar">
-      <div class="seg">
-        <button class="${state.view === "month" ? "on" : ""}" data-act="view" data-v="month">Месяц</button>
-        <button class="${state.view === "week" ? "on" : ""}" data-act="view" data-v="week">Неделя</button>
+    <div class="layout">
+      <div class="col-main">
+        <div class="${anim}">${renderNext(data)}</div>
+        <div class="toolbar">
+          <div class="seg">
+            <button class="${state.view === "month" ? "on" : ""}" data-act="view" data-v="month">Месяц</button>
+            <button class="${state.view === "week" ? "on" : ""}" data-act="view" data-v="week">Неделя</button>
+          </div>
+          <button class="chip ${state.onlyMine ? "on" : ""}" data-act="mine">${state.onlyMine ? ICON.check : ""}Только мои</button>
+        </div>
+        <div class="${anim}">${renderFriends(data)}</div>
+        ${renderCalendar(byDay)}
       </div>
-      <button class="chip ${state.onlyMine ? "on" : ""}" data-act="mine">${state.onlyMine ? ICON.check : ""}Только мои</button>
+      <aside class="col-side"><div class="${anim}">${renderAgenda(byDay, data)}</div></aside>
     </div>
-    <div class="${anim}">${renderFriends(data)}</div>
-    ${renderCalendar(byDay)}
-    <div class="${anim}">${renderAgenda(byDay, data)}</div>
     ${data ? `<button class="fab" data-act="new" aria-label="Создать событие">${ICON.plus}Событие</button>` : ""}
-    <div style="height:84px"></div>`;
+    <div class="spacer" style="height:84px"></div>`;
 }
 
 function screen(icon, title, text) {
@@ -303,12 +317,12 @@ function openSheet(html) {
   document.getElementById("sheet-body").innerHTML = html;
   sheet.scrollTop = wasOpen ? scroll : 0; // при перерисовке формы остаёмся на месте
   document.body.classList.add("open");
-  tg.BackButton.show();
+  tg.BackButton?.show();
 }
 
 function closeSheet() {
   document.body.classList.remove("open");
-  tg.BackButton.hide();
+  tg.BackButton?.hide();
 }
 
 function openEvent(id) {
@@ -337,13 +351,13 @@ function openEvent(id) {
       <div class="row">${ICON.clock}${when} · ${dur(+e.end - +e.start)}</div>
       ${e.location ? `<div class="row">${ICON.pin}${esc(e.location)}</div>` : ""}
     </div>
-    ${e.author ? `<div class="author">${avatar(e.author, "sm")}Позвал(а) ${esc(e.author.display_name)}</div>` : ""}
+    ${e.author ? `<div class="author">${avatar(e.author, "sm")}Позвал(а) ${esc(nameOf(e.author))}</div>` : ""}
     ${e.description ? `<div class="sec"><div class="sec-t">Описание</div><div class="desc">${esc(e.description)}</div></div>` : ""}
     <div class="sec"><div class="sec-t"><span>Участники</span><span>${ppl.length}</span></div>
       <div class="bar">${bar}</div><div class="legend">${legend}</div>
       ${ppl.map((p) => {
         const pr = data.byId.get(p.user_id);
-        return pr ? `<div class="person">${avatar(pr, `md ${p.rsvp}`)}<div class="name">${p.user_id === data.me.id ? "Вы" : esc(pr.display_name)}<small>@${esc(pr.username)}</small></div>
+        return pr ? `<div class="person">${avatar(pr, `md ${p.rsvp}`)}<div class="name">${p.user_id === data.me.id ? "Вы" : esc(nameOf(pr))}<small>@${esc(pr.username)}</small></div>
           <span class="badge ${p.rsvp}">${RSVP[p.rsvp]}</span></div>` : "";
       }).join("")}
     </div>
@@ -412,6 +426,7 @@ function openStatus() {
 }
 
 async function saveStatus(btn) {
+  if (btn.disabled) return;
   btn.disabled = true;
   btn.textContent = "Сохраняю…";
   try {
@@ -470,7 +485,7 @@ function renderForm(err = "") {
     <textarea name="description" maxlength="1000" placeholder="Что взять, сколько стоит, кто за рулём…">${esc(draft.description)}</textarea>
     <label>Кого позвать${n ? ` · ${n}` : ""}</label>
     <div class="opts">${opt("all", "1", draft.all, "Всех")}${friends.map((p) =>
-      opt("guest", p.id, draft.all || draft.guests.has(p.id), `${avatar(p)}${esc(p.display_name)}`)).join("")}</div>
+      opt("guest", p.id, draft.all || draft.guests.has(p.id), `${avatar(p)}${esc(nameOf(p))}`)).join("")}</div>
     <div class="hint">${ICON.info}<span>Голос в опросе сразу засчитывается как ответ в Тусиме.</span></div>
     <div class="err">${esc(err)}</div>
     <button type="button" class="submit" data-act="submit">Создать событие</button>
@@ -485,6 +500,7 @@ function openForm() {
 }
 
 async function submitForm(btn) {
+  if (btn.disabled) return;
   const start = new Date(`${draft.date}T${draft.time}`);
   if (!draft.title.trim()) return renderForm("Напишите, что делаем");
   if (isNaN(+start)) return renderForm("Укажите дату и время");
@@ -519,7 +535,8 @@ function toast(text) {
   const el = document.getElementById("toast");
   el.innerHTML = `${ICON.check}${esc(text)}`;
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2600);
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove("show"), 2600);
 }
 
 document.addEventListener("input", (ev) => {
@@ -529,17 +546,23 @@ document.addEventListener("input", (ev) => {
 });
 
 // ---------- навигация ----------
+let reqId = 0;
+
 async function refresh() {
   const [from, to] = range();
   const k = from.toISOString() + to.toISOString();
+  const my = ++reqId;
   state.loading = !cache.has(k);
   if (state.loading) state.animate = true;
   render();
   try {
-    state.data = await load(from, to);
+    const data = await load(from, to);
+    if (my !== reqId) return; // пока грузили, уже перелистнули дальше
+    state.data = data;
     state.loading = false;
     render();
   } catch (e) {
+    if (my !== reqId) return;
     if (e.code === "not_linked") screen(ICON.link, "Привяжите аккаунт", `Отправьте ${BOT} команду <code>/link ник пароль</code> и откройте календарь снова.`);
     else if (e.code === "unauthorized") screen(ICON.clock, "Сессия устарела", `Закройте окно и снова отправьте боту <code>/calendar</code>.`);
     else screen(ICON.wifi, "Нет связи", `Проверьте интернет и попробуйте ещё раз.<br><br><button class="pill" data-act="retry">Повторить</button>`);
@@ -606,8 +629,17 @@ document.addEventListener("touchend", (e) => {
   touchX = null;
 }, { passive: true });
 
+// клавиатура на ноутбуке: Esc закрывает окно, стрелки листают
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && sheetOpen()) { closeSheet(); return; }
+  if (sheetOpen() || e.metaKey || e.ctrlKey || e.altKey || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "")) return;
+  if (e.key === "ArrowLeft") shift(-1);
+  else if (e.key === "ArrowRight") shift(1);
+  else if (e.key === "t" || e.key === "е") { state.cursor = state.sel = dayStart(new Date()); refresh(); }
+});
+
 // раз в минуту обновляем отсчёт «через N мин» и «Сейчас»
-setInterval(() => { if (state.data && !state.loading && !document.body.classList.contains("open")) render(); }, 60_000);
+setInterval(() => { if (state.data && !state.loading && !sheetOpen()) render(); }, 60_000);
 
 // ---------- старт ----------
 if (!tg || !tg.initData) {
@@ -616,6 +648,6 @@ if (!tg || !tg.initData) {
   tg.ready();
   tg.expand();
   try { tg.setHeaderColor("#0B0B0D"); tg.setBackgroundColor("#0B0B0D"); tg.setBottomBarColor && tg.setBottomBarColor("#0B0B0D"); } catch (_) {}
-  tg.BackButton.onClick(closeSheet);
+  tg.BackButton?.onClick(closeSheet);
   refresh();
 }
