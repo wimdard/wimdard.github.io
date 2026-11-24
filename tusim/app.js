@@ -21,6 +21,7 @@ const svg = (d) => `<svg viewBox="0 0 24 24">${d}</svg>`;
 const ICON = {
   left: svg('<path d="M15 6l-6 6 6 6"/>'),
   right: svg('<path d="M9 6l6 6-6 6"/>'),
+  gear: svg('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   pin: svg('<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'),
   clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
   plus: svg('<path d="M12 5v14M5 12h14"/>'),
@@ -43,7 +44,18 @@ const CAT_ICON = {
 
 const tg = window.Telegram && window.Telegram.WebApp;
 const $app = document.getElementById("app");
-const state = { view: "month", cursor: dayStart(new Date()), sel: dayStart(new Date()), onlyMine: false, data: null, loading: true, animate: true };
+// Личные настройки вида хранятся на устройстве
+const PREFS_KEY = "tusim.prefs";
+const prefs = (() => {
+  try { return { view: "month", onlyMine: false, ...JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") }; }
+  catch { return { view: "month", onlyMine: false }; }
+})();
+const savePrefs = () => { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch {} };
+
+const state = {
+  view: prefs.view === "week" ? "week" : "month", cursor: dayStart(new Date()), sel: dayStart(new Date()),
+  onlyMine: !!prefs.onlyMine, data: null, loading: true, animate: true,
+};
 const cache = new Map();
 
 // ---------- даты ----------
@@ -179,6 +191,7 @@ function header(data) {
       <button class="pill" data-act="today">Сегодня</button>
       <button class="icon-btn" data-act="next" aria-label="Вперёд">${ICON.right}</button>
       ${data ? `<button class="pill add desk" data-act="new">${ICON.plus}Событие</button>` : ""}
+      ${data ? `<button class="icon-btn" data-act="settings" aria-label="Настройки">${ICON.gear}</button>` : ""}
     </div>
   </header>`;
 }
@@ -404,13 +417,14 @@ async function deleteEvent(btn) {
   }
 }
 
-// ---------- свой статус ----------
+// ---------- настройки: профиль, статус, вид ----------
 let statusDraft = null;
 
 function renderStatus(err = "") {
+  const seg = (act, val, on, label) => `<button type="button" class="${on ? "on" : ""}" data-act="${act}" data-v="${val}">${label}</button>`;
   openSheet(`<div class="form">
-    <h3>Мой профиль</h3>
-    <div class="lead">Его видит вся компания в календаре и в /friends</div>
+    <h3>Настройки</h3>
+    <div class="section">Профиль</div>
     <div class="two">
       <div><label>Имя</label><input name="p_name" maxlength="40" placeholder="Никита" value="${esc(statusDraft.name)}" autocomplete="off"></div>
       <div><label>Ник</label><input name="p_nick" maxlength="20" placeholder="nikita" value="${esc(statusDraft.nick)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
@@ -419,10 +433,17 @@ function renderStatus(err = "") {
     <label>Сейчас я</label>
     <div class="opts">${Object.entries(STATUS).map(([k, v]) => `<button type="button" class="opt ${statusDraft.status === k ? "on" : ""}" data-act="st" data-v="${k}">
       <i class="st-dot" style="background:${STATUS_COLOR[k]}"></i>${v}</button>`).join("")}</div>
-    <label>Подпись</label>
+    <label>Подпись к статусу</label>
     <input name="note" maxlength="80" placeholder="Например: до 18:00 на работе" value="${esc(statusDraft.note)}" autocomplete="off">
     <div class="err">${esc(err)}</div>
-    <button type="button" class="submit" data-act="st-save">Сохранить</button>
+    <button type="button" class="submit" data-act="st-save">Сохранить профиль</button>
+
+    <div class="section">Календарь <small>· только на этом устройстве</small></div>
+    <label>Открывать</label>
+    <div class="seg full">${seg("pref-view", "month", prefs.view !== "week", "Месяц")}${seg("pref-view", "week", prefs.view === "week", "Неделя")}</div>
+    <button type="button" class="toggle ${prefs.onlyMine ? "on" : ""}" data-act="pref-mine">
+      <span><b>Только мои события</b><small>Сразу скрывать события, где вы не участвуете</small></span><i></i>
+    </button>
   </div>`);
 }
 
@@ -657,7 +678,9 @@ document.addEventListener("click", (ev) => {
   }
   else if (act === "submit") submitForm(el);
   else if (act === "del") deleteEvent(el);
-  else if (act === "status") openStatus();
+  else if (act === "status" || act === "settings") openStatus();
+  else if (act === "pref-view") { prefs.view = el.dataset.v; savePrefs(); renderStatus(); }
+  else if (act === "pref-mine") { prefs.onlyMine = !prefs.onlyMine; savePrefs(); state.onlyMine = prefs.onlyMine; renderStatus(); render(); }
   else if (act === "st") { statusDraft.status = el.dataset.v; renderStatus(); }
   else if (act === "st-save") saveStatus(el);
   else if (act === "day") {
@@ -700,5 +723,10 @@ if (!tg || !tg.initData) {
   tg.expand();
   try { tg.setHeaderColor("#0B0B0D"); tg.setBackgroundColor("#0B0B0D"); tg.setBottomBarColor && tg.setBottomBarColor("#0B0B0D"); } catch (_) {}
   tg.BackButton?.onClick(closeSheet);
+  // Пункт «Настройки» в меню ⋯ самого Telegram
+  if (tg.SettingsButton && tg.isVersionAtLeast?.("7.0")) {
+    tg.SettingsButton.show();
+    tg.SettingsButton.onClick(() => state.data && openStatus());
+  }
   refresh();
 }
