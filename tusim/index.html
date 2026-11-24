@@ -186,6 +186,10 @@ body.open{overflow:hidden}
 .danger:active{transform:scale(.98)}
 .danger.confirm{background:var(--red);color:#fff;border-color:var(--red)}
 .danger:disabled{opacity:.5}
+.ghost{width:100%;height:50px;border-radius:16px;margin-top:24px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800;font-size:15px;background:var(--card);border:1px solid var(--line2);transition:background .15s,transform .1s}
+.ghost:active{transform:scale(.98)}
+.ghost + .danger{margin-top:8px}
+@media (hover:hover){.ghost:hover{background:var(--card2);border-color:var(--line3)}}
 
 /* ---------- форма ---------- */
 .fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 20px);height:56px;padding:0 20px 0 16px;border-radius:999px;background:#fff;color:#000;display:flex;align-items:center;gap:8px;font-weight:800;font-size:15px;box-shadow:0 10px 30px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.3);transition:transform .15s}
@@ -291,6 +295,6 @@ body.open{overflow:hidden}
   <button class="sheet-x" data-act="close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   <div id="sheet-body"></div></div>
 <div class="toast" id="toast"></div>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>

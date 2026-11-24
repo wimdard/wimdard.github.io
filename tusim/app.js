@@ -2,6 +2,7 @@
 const API = "https://gqlslscpxehonlyajssy.supabase.co/functions/v1/tusim-bot?api=calendar";
 const API_CREATE = API.replace("api=calendar", "api=create");
 const API_DELETE = API.replace("api=calendar", "api=delete");
+const API_UPDATE = API.replace("api=calendar", "api=update");
 const API_STATUS = API.replace("api=calendar", "api=status");
 const BOT = "@calasisbot";
 const DAY_START = 10, DAY_END = 23, MIN_FREE = 60;
@@ -29,6 +30,7 @@ const ICON = {
   wifi: svg('<path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r=".8"/>'),
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
   trash: svg('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>'),
+  edit: svg('<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
 };
 const CAT_ICON = {
@@ -361,6 +363,7 @@ function openEvent(id) {
           <span class="badge ${p.rsvp}">${RSVP[p.rsvp]}</span></div>` : "";
       }).join("")}
     </div>
+    ${canDelete(e) && +e.end > Date.now() ? `<button class="ghost" data-act="edit" data-id="${e.id}">${ICON.edit}Изменить</button>` : ""}
     ${canDelete(e) ? `<button class="danger" data-act="del" data-id="${e.id}">${ICON.trash}Удалить событие</button>` : ""}`);
   haptic();
 }
@@ -461,69 +464,87 @@ function newDraft() {
   return { title: "", category: "meet", date: key(d), time: "19:00", minutes: 120, location: "", description: "", guests: new Set(), all: false };
 }
 
+/** Черновик из существующего события — для правки. */
+function editDraft(e) {
+  return {
+    id: e.id, startedAt: +e.start,
+    title: e.title, category: CAT[e.category] ? e.category : "other", date: key(e.start), time: hm(e.start),
+    minutes: Math.round((+e.end - +e.start) / 6e4), location: e.location || "", description: e.description || "",
+    guests: new Set(), all: false,
+  };
+}
+
 function renderForm(err = "") {
   const data = state.data;
+  const edit = !!draft.id;
   const friends = data.profiles.filter((p) => p.id !== data.me.id);
   const opt = (act, val, on, label) => `<button type="button" class="opt ${on ? "on" : ""}" data-act="${act}" data-v="${esc(val)}">${label}</button>`;
   const n = draft.all ? friends.length : draft.guests.size;
+  // У старого события может быть своя длительность (например, поездка на 10 ч) — показываем и её
+  const durations = DURATIONS.some(([m]) => m === draft.minutes) ? DURATIONS : [...DURATIONS, [draft.minutes, dur(draft.minutes * 6e4)]];
+  const minDate = edit && draft.startedAt < Date.now() ? key(new Date(draft.startedAt)) : key(new Date());
   openSheet(`<div class="form">
-    <h3>Новое событие</h3>
-    <div class="lead">Друзья получат приглашение, а в группе появится опрос</div>
+    <h3>${edit ? "Изменить событие" : "Новое событие"}</h3>
+    <div class="lead">${edit ? "Голоса сохранятся, в группе появится короткая заметка об изменениях" : "Друзья получат приглашение, а в группе появится опрос"}</div>
     <label>Что делаем</label>
     <input class="big" name="title" maxlength="120" placeholder="Квиз в баре" value="${esc(draft.title)}" autocomplete="off">
     <label>Тип</label>
     <div class="opts">${Object.entries(CAT).map(([k, v]) => opt("cat", k, draft.category === k, `${CAT_ICON[k]}${v}`)).join("")}</div>
     <div class="two">
-      <div><label>Дата</label><input name="date" type="date" min="${key(new Date())}" value="${draft.date}"></div>
+      <div><label>Дата</label><input name="date" type="date" min="${minDate}" value="${draft.date}"></div>
       <div><label>Начало</label><input name="time" type="time" step="300" value="${draft.time}"></div>
     </div>
     <label>Сколько по времени</label>
-    <div class="opts">${DURATIONS.map(([m, l]) => opt("dur", m, draft.minutes === m, l)).join("")}</div>
+    <div class="opts">${durations.map(([m, l]) => opt("dur", m, draft.minutes === m, l)).join("")}</div>
     <label>Где</label>
     <input name="location" maxlength="120" placeholder="Бар, адрес или ссылка на созвон" value="${esc(draft.location)}" autocomplete="off">
     <label>Подробности</label>
     <textarea name="description" maxlength="1000" placeholder="Что взять, сколько стоит, кто за рулём…">${esc(draft.description)}</textarea>
-    <label>Кого позвать${n ? ` · ${n}` : ""}</label>
+    ${edit ? "" : `<label>Кого позвать${n ? ` · ${n}` : ""}</label>
     <div class="opts">${opt("all", "1", draft.all, "Всех")}${friends.map((p) =>
       opt("guest", p.id, draft.all || draft.guests.has(p.id), `${avatar(p)}${esc(nameOf(p))}`)).join("")}</div>
-    <div class="hint">${ICON.info}<span>Голос в опросе сразу засчитывается как ответ в Тусиме.</span></div>
+    <div class="hint">${ICON.info}<span>Голос в опросе сразу засчитывается как ответ в Тусиме.</span></div>`}
     <div class="err">${esc(err)}</div>
-    <button type="button" class="submit" data-act="submit">Создать событие</button>
+    <button type="button" class="submit" data-act="submit">${edit ? "Сохранить" : "Создать событие"}</button>
   </div>`);
 }
 
-function openForm() {
-  draft = newDraft();
+function openForm(e) {
+  draft = e ? editDraft(e) : newDraft();
   closeSheet();
   renderForm();
-  setTimeout(() => document.querySelector(".form input.big")?.focus(), 350);
+  if (!e) setTimeout(() => document.querySelector(".form input.big")?.focus(), 350);
 }
 
 async function submitForm(btn) {
   if (btn.disabled) return;
+  const edit = !!draft.id;
   const start = new Date(`${draft.date}T${draft.time}`);
   if (!draft.title.trim()) return renderForm("Напишите, что делаем");
   if (isNaN(+start)) return renderForm("Укажите дату и время");
-  if (+start < Date.now() - 5 * 6e4) return renderForm("Это время уже прошло");
+  const keepsStart = edit && +start === draft.startedAt;
+  if (!keepsStart && +start < Date.now() - 5 * 6e4) return renderForm("Это время уже прошло");
   btn.disabled = true;
-  btn.textContent = "Создаю…";
+  btn.textContent = edit ? "Сохраняю…" : "Создаю…";
   try {
-    const res = await fetch(API_CREATE, {
+    const fields = {
+      title: draft.title, category: draft.category, starts_at: start.toISOString(), minutes: draft.minutes,
+      location: draft.location, description: draft.description,
+    };
+    const res = await fetch(edit ? API_UPDATE : API_CREATE, {
       method: "POST",
       headers: { "x-init-data": tg.initData, "content-type": "application/json" },
-      body: JSON.stringify({
-        title: draft.title, category: draft.category, starts_at: start.toISOString(), minutes: draft.minutes,
-        location: draft.location, description: draft.description, guests: draft.all ? "all" : [...draft.guests],
-      }),
+      body: JSON.stringify(edit ? { ...fields, event_id: draft.id } : { ...fields, guests: draft.all ? "all" : [...draft.guests] }),
     });
     const body = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(body.error && body.error !== "server" ? body.error : "Не получилось создать, попробуйте ещё раз");
+    if (!res.ok) throw new Error(body.error && body.error !== "server" ? body.error : edit ? "Не получилось сохранить" : "Не получилось создать, попробуйте ещё раз");
     tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
     closeSheet();
     cache.clear();
     state.sel = dayStart(start);
     state.cursor = state.view === "week" ? state.sel : new Date(start.getFullYear(), start.getMonth(), 1);
-    toast("Событие создано");
+    toast(edit ? "Изменения сохранены" : "Событие создано");
+    draft = null;
     refresh();
   } catch (e) {
     tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("error");
@@ -595,6 +616,7 @@ document.addEventListener("click", (ev) => {
   else if (act === "close") closeSheet();
   else if (act === "retry") refresh();
   else if (act === "new") openForm();
+  else if (act === "edit") { const e = state.data?.events.find((x) => x.id === el.dataset.id); if (e) openForm(e); }
   else if (act === "cat") { draft.category = el.dataset.v; renderForm(); }
   else if (act === "dur") { draft.minutes = Number(el.dataset.v); renderForm(); }
   else if (act === "all") { draft.all = !draft.all; draft.guests.clear(); renderForm(); }
