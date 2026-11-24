@@ -417,10 +417,26 @@ async function deleteEvent(btn) {
   }
 }
 
-// ---------- настройки: профиль, статус, вид ----------
+// ---------- статус и настройки ----------
 let statusDraft = null;
 
+/** Два отдельных окна на одних данных: «Статус» (кружок «Вы») и «Настройки» (шестерёнка). */
 function renderStatus(err = "") {
+  if (statusDraft.mode === "settings") return renderSettings(err);
+  openSheet(`<div class="form">
+    <h3>Статус</h3>
+    <div class="lead">Его видит вся компания в календаре и в /friends</div>
+    <label>Сейчас я</label>
+    <div class="opts">${Object.entries(STATUS).map(([k, v]) => `<button type="button" class="opt ${statusDraft.status === k ? "on" : ""}" data-act="st" data-v="${k}">
+      <i class="st-dot" style="background:${STATUS_COLOR[k]}"></i>${v}</button>`).join("")}</div>
+    <label>Подпись</label>
+    <input name="note" maxlength="80" placeholder="Например: до 18:00 на работе" value="${esc(statusDraft.note)}" autocomplete="off">
+    <div class="err">${esc(err)}</div>
+    <button type="button" class="submit" data-act="st-save">Сохранить статус</button>
+  </div>`);
+}
+
+function renderSettings(err = "") {
   const seg = (act, val, on, label) => `<button type="button" class="${on ? "on" : ""}" data-act="${act}" data-v="${val}">${label}</button>`;
   openSheet(`<div class="form">
     <h3>Настройки</h3>
@@ -430,11 +446,6 @@ function renderStatus(err = "") {
       <div><label>Ник</label><input name="p_nick" maxlength="20" placeholder="nikita" value="${esc(statusDraft.nick)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
     </div>
     ${statusDraft.nick.trim().toLowerCase() !== statusDraft.oldNick ? `<div class="hint">${ICON.info}<span>Ник — это и логин на сайте. Входить нужно будет как <b>${esc(statusDraft.nick.trim().toLowerCase())}</b>, пароль тот же.</span></div>` : ""}
-    <label>Сейчас я</label>
-    <div class="opts">${Object.entries(STATUS).map(([k, v]) => `<button type="button" class="opt ${statusDraft.status === k ? "on" : ""}" data-act="st" data-v="${k}">
-      <i class="st-dot" style="background:${STATUS_COLOR[k]}"></i>${v}</button>`).join("")}</div>
-    <label>Подпись к статусу</label>
-    <input name="note" maxlength="80" placeholder="Например: до 18:00 на работе" value="${esc(statusDraft.note)}" autocomplete="off">
     <div class="err">${esc(err)}</div>
     <button type="button" class="submit" data-act="st-save">Сохранить профиль</button>
 
@@ -447,10 +458,10 @@ function renderStatus(err = "") {
   </div>`);
 }
 
-function openStatus() {
+function openStatus(mode = "status") {
   const me = state.data.byId.get(state.data.me.id);
   statusDraft = {
-    status: me?.status || "free", note: me?.status_note || "",
+    mode, status: me?.status || "free", note: me?.status_note || "",
     name: me?.display_name || "", nick: me?.username || "", oldNick: me?.username || "",
   };
   closeSheet();
@@ -479,7 +490,7 @@ async function saveStatus(btn) {
     }
     tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
     closeSheet();
-    toast(nick !== statusDraft.oldNick ? `Теперь вы @${nick}` : "Профиль обновлён");
+    toast(statusDraft.mode === "status" ? "Статус обновлён" : nick !== statusDraft.oldNick ? `Теперь вы @${nick}` : "Профиль обновлён");
     render();
   } catch (e) {
     tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("error");
@@ -678,7 +689,8 @@ document.addEventListener("click", (ev) => {
   }
   else if (act === "submit") submitForm(el);
   else if (act === "del") deleteEvent(el);
-  else if (act === "status" || act === "settings") openStatus();
+  else if (act === "status") openStatus("status");
+  else if (act === "settings") openStatus("settings");
   else if (act === "pref-view") { prefs.view = el.dataset.v; savePrefs(); renderStatus(); }
   else if (act === "pref-mine") { prefs.onlyMine = !prefs.onlyMine; savePrefs(); state.onlyMine = prefs.onlyMine; renderStatus(); render(); }
   else if (act === "st") { statusDraft.status = el.dataset.v; renderStatus(); }
@@ -726,7 +738,7 @@ if (!tg || !tg.initData) {
   // Пункт «Настройки» в меню ⋯ самого Telegram
   if (tg.SettingsButton && tg.isVersionAtLeast?.("7.0")) {
     tg.SettingsButton.show();
-    tg.SettingsButton.onClick(() => state.data && openStatus());
+    tg.SettingsButton.onClick(() => state.data && openStatus("settings"));
   }
   refresh();
 }
