@@ -409,8 +409,13 @@ let statusDraft = null;
 
 function renderStatus(err = "") {
   openSheet(`<div class="form">
-    <h3>Мой статус</h3>
+    <h3>Мой профиль</h3>
     <div class="lead">Его видит вся компания в календаре и в /friends</div>
+    <div class="two">
+      <div><label>Имя</label><input name="p_name" maxlength="40" placeholder="Никита" value="${esc(statusDraft.name)}" autocomplete="off"></div>
+      <div><label>Ник</label><input name="p_nick" maxlength="20" placeholder="nikita" value="${esc(statusDraft.nick)}" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+    </div>
+    ${statusDraft.nick.trim().toLowerCase() !== statusDraft.oldNick ? `<div class="hint">${ICON.info}<span>Ник — это и логин на сайте. Входить нужно будет как <b>${esc(statusDraft.nick.trim().toLowerCase())}</b>, пароль тот же.</span></div>` : ""}
     <label>Сейчас я</label>
     <div class="opts">${Object.entries(STATUS).map(([k, v]) => `<button type="button" class="opt ${statusDraft.status === k ? "on" : ""}" data-act="st" data-v="${k}">
       <i class="st-dot" style="background:${STATUS_COLOR[k]}"></i>${v}</button>`).join("")}</div>
@@ -423,31 +428,37 @@ function renderStatus(err = "") {
 
 function openStatus() {
   const me = state.data.byId.get(state.data.me.id);
-  statusDraft = { status: me?.status || "free", note: me?.status_note || "" };
+  statusDraft = {
+    status: me?.status || "free", note: me?.status_note || "",
+    name: me?.display_name || "", nick: me?.username || "", oldNick: me?.username || "",
+  };
   closeSheet();
   renderStatus();
 }
 
 async function saveStatus(btn) {
   if (btn.disabled) return;
+  const nick = statusDraft.nick.trim().toLowerCase().replace(/^@/, "");
+  if (!statusDraft.name.trim()) return renderStatus("Напишите имя");
+  if (!/^[a-z0-9_]{3,20}$/.test(nick)) return renderStatus("Ник — 3–20 символов: латиница, цифры, _");
   btn.disabled = true;
   btn.textContent = "Сохраняю…";
   try {
     const res = await fetch(API_STATUS, {
       method: "POST",
       headers: { "x-init-data": tg.initData, "content-type": "application/json" },
-      body: JSON.stringify({ status: statusDraft.status, note: statusDraft.note }),
+      body: JSON.stringify({ status: statusDraft.status, note: statusDraft.note, name: statusDraft.name, username: nick }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error && body.error !== "server" ? body.error : "Не получилось сохранить");
     // Обновляем себя во всех загруженных месяцах, чтобы не грузить заново
     for (const d of cache.values()) {
       const me = d.byId.get(d.me.id);
-      if (me) { me.status = body.status; me.status_note = body.status_note; }
+      if (me) Object.assign(me, { status: body.status, status_note: body.status_note, display_name: body.display_name, username: body.username });
     }
     tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
     closeSheet();
-    toast("Статус обновлён");
+    toast(nick !== statusDraft.oldNick ? `Теперь вы @${nick}` : "Профиль обновлён");
     render();
   } catch (e) {
     tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("error");
@@ -565,6 +576,21 @@ function toast(text) {
 document.addEventListener("input", (ev) => {
   const name = ev.target.name;
   if (name === "note" && statusDraft) statusDraft.note = ev.target.value;
+  else if (name === "p_name" && statusDraft) statusDraft.name = ev.target.value;
+  else if (name === "p_nick" && statusDraft) {
+    const was = statusDraft.nick.trim().toLowerCase() !== statusDraft.oldNick;
+    statusDraft.nick = ev.target.value;
+    // Подсказку про логин показываем/прячем сразу, не сбивая курсор
+    if (was !== (statusDraft.nick.trim().toLowerCase() !== statusDraft.oldNick)) {
+      const pos = ev.target.selectionStart;
+      renderStatus();
+      const el = document.querySelector('input[name="p_nick"]');
+      el?.focus(); el?.setSelectionRange(pos, pos);
+    } else {
+      const b = document.querySelector(".form .hint b");
+      if (b) b.textContent = statusDraft.nick.trim().toLowerCase();
+    }
+  }
   else if (draft && name in draft) draft[name] = ev.target.value;
 });
 
