@@ -461,7 +461,7 @@ let draft = null;
 
 function newDraft() {
   const d = dayStart(state.sel) < dayStart(new Date()) ? dayStart(new Date()) : state.sel;
-  return { title: "", category: "meet", date: key(d), time: "19:00", minutes: 120, location: "", description: "", guests: new Set(), all: false };
+  return { title: "", category: "meet", date: key(d), time: "19:00", minutes: 120, location: "", description: "", guests: new Set(), all: false, poll: true };
 }
 
 /** Черновик из существующего события — для правки. */
@@ -485,7 +485,7 @@ function renderForm(err = "") {
   const minDate = edit && draft.startedAt < Date.now() ? key(new Date(draft.startedAt)) : key(new Date());
   openSheet(`<div class="form">
     <h3>${edit ? "Изменить событие" : "Новое событие"}</h3>
-    <div class="lead">${edit ? "Голоса сохранятся, в группе появится короткая заметка об изменениях" : "Друзья получат приглашение, а в группе появится опрос"}</div>
+    <div class="lead">${edit ? "Голоса сохранятся, в группе появится короткая заметка об изменениях" : draft.poll ? "Друзья получат приглашение, а в группе появится опрос" : "Без опроса — гостям придёт личное приглашение"}</div>
     <label>Что делаем</label>
     <input class="big" name="title" maxlength="120" placeholder="Квиз в баре" value="${esc(draft.title)}" autocomplete="off">
     <label>Тип</label>
@@ -503,7 +503,9 @@ function renderForm(err = "") {
     ${edit ? "" : `<label>Кого позвать${n ? ` · ${n}` : ""}</label>
     <div class="opts">${opt("all", "1", draft.all, "Всех")}${friends.map((p) =>
       opt("guest", p.id, draft.all || draft.guests.has(p.id), `${avatar(p)}${esc(nameOf(p))}`)).join("")}</div>
-    <div class="hint">${ICON.info}<span>Голос в опросе сразу засчитывается как ответ в Тусиме.</span></div>`}
+    <button type="button" class="toggle ${draft.poll ? "on" : ""}" data-act="poll">
+      <span><b>Опрос в группе</b><small>${draft.poll ? "Иду / Возможно / Не смогу — голос сразу идёт в Тусим" : "В группу ничего не отправится"}</small></span><i></i>
+    </button>`}
     <div class="err">${esc(err)}</div>
     <button type="button" class="submit" data-act="submit">${edit ? "Сохранить" : "Создать событие"}</button>
   </div>`);
@@ -534,7 +536,7 @@ async function submitForm(btn) {
     const res = await fetch(edit ? API_UPDATE : API_CREATE, {
       method: "POST",
       headers: { "x-init-data": tg.initData, "content-type": "application/json" },
-      body: JSON.stringify(edit ? { ...fields, event_id: draft.id } : { ...fields, guests: draft.all ? "all" : [...draft.guests] }),
+      body: JSON.stringify(edit ? { ...fields, event_id: draft.id } : { ...fields, guests: draft.all ? "all" : [...draft.guests], poll: draft.poll }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error && body.error !== "server" ? body.error : edit ? "Не получилось сохранить" : "Не получилось создать, попробуйте ещё раз");
@@ -620,6 +622,7 @@ document.addEventListener("click", (ev) => {
   else if (act === "cat") { draft.category = el.dataset.v; renderForm(); }
   else if (act === "dur") { draft.minutes = Number(el.dataset.v); renderForm(); }
   else if (act === "all") { draft.all = !draft.all; draft.guests.clear(); renderForm(); }
+  else if (act === "poll") { draft.poll = !draft.poll; renderForm(); }
   else if (act === "guest") {
     const id = el.dataset.v;
     if (draft.all) { draft.all = false; state.data.profiles.forEach((p) => p.id !== state.data.me.id && draft.guests.add(p.id)); }
